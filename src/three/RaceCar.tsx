@@ -10,16 +10,19 @@ export const CAR_URL = "/models/red-bull-rb22.glb";
 
 const AXES = ["x", "y", "z"] as const;
 
-// The rims read as a 36-spoke pattern, so their visual repeat is 10 degrees. One frame that
-// advances a tyre further than half that repeat makes the spokes stand still or run backwards,
-// which looks like a wobbling wheel — so the step is capped per frame as well as per second.
-const MAX_SPIN_RATE = 3;
-const MAX_SPIN_STEP = 0.05;
+// A 36-spoke rim repeats every 10 degrees, so rolling it fast enough without trailing samples makes
+// the spokes stand still or run backwards. Where there is no blur budget, keep the spin under that
+// aliasing limit instead.
+const BLURLESS_SPIN_RATE = 3;
+// Shutter window of the trails, and the longest frame they assume, so a hitch cannot smear the
+// tyre half way around.
+const MAX_BLUR_SPAN = 0.8;
 const MAX_FRAME_DELTA = 1 / 20;
 
-type Wheel = { pivot: THREE.Group; axis: (typeof AXES)[number]; radius: number };
+type Trail = { pivot: THREE.Group; lag: number };
+type Wheel = { pivot: THREE.Group; axis: (typeof AXES)[number]; radius: number; trails: Trail[] };
 
-export function RaceCar({ speed = 0 }: { speed?: number }) {
+export function RaceCar({ speed = 0, blurSamples = 0 }: { speed?: number; blurSamples?: number }) {
   const { scene } = useGLTF(CAR_URL);
 
   // Model space: nose along -X, 5.4 m long, already resting on y = 0.
@@ -94,19 +97,49 @@ export function RaceCar({ speed = 0 }: { speed?: number }) {
       host.add(pivot);
       pivot.add(wheelNode);
 
-      found.push({ pivot, axis, radius });
+      // Motion blur is the wheel's own recent positions, kept as faint trailing copies that share
+      // its geometry and only pay for a transparent material each.
+      const trails: Trail[] = [];
+      for (let sample = 1; sample <= blurSamples; sample++) {
+        const trailPivot = new THREE.Group();
+        trailPivot.position.copy(hub);
+        trailPivot.userData.wheelPivot = true;
+        host.add(trailPivot);
+
+        const ghost = wheelNode.clone(true);
+        ghost.traverse((child) => {
+          if (!(child instanceof THREE.Mesh)) return;
+          const source = child.material;
+          if (!(source instanceof THREE.MeshStandardMaterial)) return;
+          const faded = source.clone();
+          faded.transparent = true;
+          faded.depthWrite = false;
+          faded.opacity = 0.34 / sample;
+          child.material = faded;
+        });
+        trailPivot.add(ghost);
+        trails.push({ pivot: trailPivot, lag: sample / (blurSamples + 1) });
+      }
+
+      found.push({ pivot, axis, radius, trails });
     }
 
     return found;
-  }, [car]);
+  }, [blurSamples, car]);
 
   useFrame((_, delta) => {
     if (!speed) return;
     const dt = Math.min(delta, MAX_FRAME_DELTA);
     for (const wheel of wheels) {
-      const rate = Math.min(speed / wheel.radius, MAX_SPIN_RATE);
+      // True rolling: the tread has to keep up with the track scrolling under it.
+      const rolling = speed / wheel.radius;
+      const rate = wheel.trails.length ? rolling : Math.min(rolling, BLURLESS_SPIN_RATE);
       // Nose points along -X in model space, so +Z drives the tread toward the car's front.
-      wheel.pivot.rotation[wheel.axis] += Math.min(rate * dt, MAX_SPIN_STEP);
+      wheel.pivot.rotation[wheel.axis] += rate * dt;
+      if (!wheel.trails.length) continue;
+      const span = Math.min(rate * dt, MAX_BLUR_SPAN);
+      const rotation = wheel.pivot.rotation[wheel.axis];
+      for (const trail of wheel.trails) trail.pivot.rotation[wheel.axis] = rotation - trail.lag * span;
     }
   });
 
