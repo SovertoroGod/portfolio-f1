@@ -11,6 +11,122 @@ import {
 import { RaceCar } from "./RaceCar";
 
 const STREAK_COLORS = ["#e10600", "#ffd100", "#7fa8ff", "#ffffff"];
+const TRACK_HALF_WIDTH = 4.4;
+const TRACK_SPEED = 9;
+
+type StripProps = {
+  count: number;
+  spacing: number;
+  speed: number;
+  z: number;
+  y: number;
+  size: [number, number, number];
+  colors: string[];
+};
+
+function ScrollingStrip({ count, spacing, speed, z, y, size, colors }: StripProps) {
+  const mesh = useRef<THREE.InstancedMesh>(null);
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+  const total = count * spacing;
+  const xs = useMemo(
+    () => Array.from({ length: count }, (_, index) => -total / 2 + index * spacing),
+    [count, total],
+  );
+
+  useEffect(() => {
+    if (!mesh.current) return;
+    const color = new THREE.Color();
+    xs.forEach((_, index) => {
+      color.set(colors[index % colors.length]);
+      mesh.current!.setColorAt(index, color);
+    });
+    if (mesh.current.instanceColor) mesh.current.instanceColor.needsUpdate = true;
+  }, [colors, xs]);
+
+  useFrame((_, delta) => {
+    if (!mesh.current) return;
+    xs.forEach((_, index) => {
+      xs[index] -= speed * delta;
+      if (xs[index] < -total / 2) xs[index] += total;
+      dummy.position.set(xs[index], y, z);
+      dummy.scale.set(size[0], size[1], size[2]);
+      dummy.updateMatrix();
+      mesh.current!.setMatrixAt(index, dummy.matrix);
+    });
+    mesh.current.instanceMatrix.needsUpdate = true;
+  });
+
+  return (
+    <instancedMesh ref={mesh} args={[undefined, undefined, count]} frustumCulled={false}>
+      <boxGeometry args={[1, 1, 1]} />
+      <meshBasicMaterial toneMapped={false} />
+    </instancedMesh>
+  );
+}
+
+function Track({ quality, moving }: { quality: "high" | "lite"; moving: boolean }) {
+  const segments = quality === "high" ? 48 : 24;
+  return (
+    <group>
+      <mesh rotation-x={-Math.PI / 2} position={[0, -0.002, 0]}>
+        <planeGeometry args={[64, TRACK_HALF_WIDTH * 2]} />
+        <meshStandardMaterial color="#141922" roughness={0.92} metalness={0.08} />
+      </mesh>
+
+      {[-1, 1].map((side) => (
+        <mesh
+          key={side}
+          rotation-x={-Math.PI / 2}
+          position={[0, 0.002, side * (TRACK_HALF_WIDTH - 0.62)]}
+        >
+          <planeGeometry args={[64, 0.12]} />
+          <meshBasicMaterial color="#e8eeff" toneMapped={false} />
+        </mesh>
+      ))}
+
+      {moving ? (
+        <>
+          <ScrollingStrip
+            count={segments}
+            spacing={1.15}
+            speed={TRACK_SPEED}
+            z={TRACK_HALF_WIDTH - 0.3}
+            y={0.002}
+            size={[1.05, 0.02, 0.46]}
+            colors={["#e10600", "#eef2ff"]}
+          />
+          <ScrollingStrip
+            count={segments}
+            spacing={1.15}
+            speed={TRACK_SPEED}
+            z={-(TRACK_HALF_WIDTH - 0.3)}
+            y={0.002}
+            size={[1.05, 0.02, 0.46]}
+            colors={["#eef2ff", "#e10600"]}
+          />
+          <ScrollingStrip
+            count={segments}
+            spacing={2.6}
+            speed={TRACK_SPEED * 1.25}
+            z={0}
+            y={0.002}
+            size={[1.3, 0.02, 0.14]}
+            colors={["#f4f7ff"]}
+          />
+          <ScrollingStrip
+            count={segments}
+            spacing={3.4}
+            speed={TRACK_SPEED * 1.15}
+            z={-2.2}
+            y={0.002}
+            size={[1.6, 0.02, 0.1]}
+            colors={["#ffd100"]}
+          />
+        </>
+      ) : null}
+    </group>
+  );
+}
 
 function SpeedStreaks({ count }: { count: number }) {
   const mesh = useRef<THREE.InstancedMesh>(null);
@@ -23,7 +139,7 @@ function SpeedStreaks({ count }: { count: number }) {
         y: THREE.MathUtils.randFloat(0.15, 4.6),
         z: THREE.MathUtils.randFloat(3.4, 12) * (Math.random() > 0.5 ? 1 : -1),
         length: THREE.MathUtils.randFloat(1.4, 5.2),
-        speed: THREE.MathUtils.randFloat(9, 26),
+        speed: THREE.MathUtils.randFloat(2.5, 7),
       })),
     [count],
   );
@@ -66,36 +182,8 @@ function SpeedStreaks({ count }: { count: number }) {
   );
 }
 
-function Turntable() {
-  return (
-    <group>
-      <mesh position={[0, -0.04, 0]} receiveShadow>
-        <cylinderGeometry args={[3.5, 3.5, 0.08, 64]} />
-        <meshStandardMaterial color="#060c1c" roughness={0.5} metalness={0.6} />
-      </mesh>
-      <mesh position={[0, 0.005, 0]} rotation-x={-Math.PI / 2}>
-        <torusGeometry args={[3.44, 0.03, 8, 96]} />
-        <meshStandardMaterial
-          color="#1a1a1a"
-          emissive={new THREE.Color("#e10600")}
-          emissiveIntensity={2.4}
-          toneMapped={false}
-        />
-      </mesh>
-      <mesh position={[0, 0.005, 0]} rotation-x={-Math.PI / 2}>
-        <torusGeometry args={[2.9, 0.015, 8, 96]} />
-        <meshStandardMaterial
-          color="#1a1a1a"
-          emissive={new THREE.Color("#ffd100")}
-          emissiveIntensity={1.6}
-          toneMapped={false}
-        />
-      </mesh>
-    </group>
-  );
-}
-
 function Rig({ reducedMotion, quality }: { reducedMotion: boolean; quality: "high" | "lite" }) {
+  const moving = !reducedMotion;
   return (
     <>
       <hemisphereLight args={["#cfe0ff", "#0a1024", 0.6]} />
@@ -132,13 +220,13 @@ function Rig({ reducedMotion, quality }: { reducedMotion: boolean; quality: "hig
       </Environment>
 
       <group position={[0, 0.02, 0]}>
-        <RaceCar reducedMotion={reducedMotion} />
-        <Turntable />
+        <RaceCar speed={moving ? TRACK_SPEED : 0} />
+        <Track quality={quality} moving={moving} />
       </group>
 
       {quality === "high" ? (
         <>
-          <ContactShadows position={[0, 0.012, 0]} opacity={0.72} scale={16} blur={2.6} far={4} resolution={512} color="#01030a" />
+          <ContactShadows position={[0, 0.002, 0]} opacity={0.72} scale={16} blur={2.6} far={4} resolution={512} color="#01030a" />
           <mesh rotation-x={-Math.PI / 2} position={[0, -0.06, 0]}>
             <planeGeometry args={[70, 70]} />
             <MeshReflectorMaterial
