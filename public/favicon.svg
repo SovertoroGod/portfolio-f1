@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="12" fill="#050b1d" />
+  <path d="M6 46h52" stroke="#e10600" stroke-width="6" />
+  <path d="M6 54h52" stroke="#ffd100" stroke-width="4" />
+  <text
+    x="32"
+    y="34"
+    text-anchor="middle"
+    font-family="Chakra Petch, Arial, sans-serif"
+    font-size="24"
+    font-weight="700"
+    fill="#eef3ff"
+    letter-spacing="1"
+  >SWY</text>
+</svg>

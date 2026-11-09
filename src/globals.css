@@ -1,0 +1,238 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "../vendor/shadcn-tailwind-4.13.0.css";
+
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility scrollbar-gutter-stable {
+  scrollbar-gutter: stable;
+}
+
+/* Red Bull race-weekend palette: midnight navy bodywork, racing red, electric yellow. */
+:root {
+  color-scheme: dark;
+
+  --navy-950: #02050f;
+  --navy-900: #050b1d;
+  --navy-850: #08122b;
+  --navy-800: #0b1837;
+  --navy-700: #122650;
+  --navy-600: #1b3670;
+  --rb-red: #e10600;
+  --rb-red-lift: #ff3b2f;
+  --rb-yellow: #ffd100;
+  --ice: #eef3ff;
+  --steel: #97a7cf;
+
+  --line: color-mix(in oklab, var(--ice) 12%, transparent);
+  --line-strong: color-mix(in oklab, var(--ice) 22%, transparent);
+  --surface: color-mix(in oklab, var(--navy-850) 82%, transparent);
+
+  --background: var(--navy-950);
+  --foreground: var(--ice);
+  --card: var(--navy-850);
+  --card-foreground: var(--ice);
+  --popover: var(--navy-800);
+  --popover-foreground: var(--ice);
+  --primary: var(--rb-red);
+  --primary-foreground: #fff;
+  --secondary: var(--navy-700);
+  --secondary-foreground: var(--ice);
+  --muted: var(--navy-800);
+  --muted-foreground: var(--steel);
+  --accent: var(--navy-700);
+  --accent-foreground: var(--rb-yellow);
+  --destructive: var(--rb-red-lift);
+  --border: var(--line);
+  --input: var(--line);
+  --ring: var(--rb-yellow);
+  --radius: 0.5rem;
+
+  --elevation: 0 30px 80px -40px rgb(0 0 0 / 0.9);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-navy-950: var(--navy-950);
+  --color-navy-900: var(--navy-900);
+  --color-navy-850: var(--navy-850);
+  --color-navy-800: var(--navy-800);
+  --color-navy-700: var(--navy-700);
+  --color-navy-600: var(--navy-600);
+  --color-rb-red: var(--rb-red);
+  --color-rb-red-lift: var(--rb-red-lift);
+  --color-rb-yellow: var(--rb-yellow);
+  --color-ice: var(--ice);
+  --color-steel: var(--steel);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Chakra Petch", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@layer base {
+  * {
+    border-color: var(--line);
+  }
+
+  html {
+    scroll-behavior: smooth;
+    background: var(--navy-950);
+  }
+
+  body {
+    margin: 0;
+    background:
+      radial-gradient(120% 90% at 78% -10%, color-mix(in oklab, var(--navy-700) 55%, transparent) 0%, transparent 60%),
+      radial-gradient(90% 70% at 5% 105%, color-mix(in oklab, var(--rb-red) 12%, transparent) 0%, transparent 55%),
+      var(--navy-950);
+    color: var(--ice);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.015em;
+    text-transform: uppercase;
+  }
+
+  ::selection {
+    background: var(--rb-yellow);
+    color: var(--navy-950);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--rb-yellow);
+    outline-offset: 3px;
+  }
+}
+
+@layer components {
+  /* Carbon weave + diagonal race stripes used behind section bands. */
+  .carbon {
+    background-color: var(--navy-900);
+    background-image:
+      linear-gradient(135deg, rgb(255 255 255 / 0.035) 25%, transparent 25% 50%, rgb(255 255 255 / 0.035) 50% 75%, transparent 75%),
+      radial-gradient(80% 120% at 50% -20%, color-mix(in oklab, var(--navy-600) 60%, transparent), transparent 70%);
+    background-size: 8px 8px, cover;
+  }
+
+  .stripes {
+    background-image: repeating-linear-gradient(
+      115deg,
+      color-mix(in oklab, var(--rb-red) 85%, transparent) 0 10px,
+      transparent 10px 22px,
+      color-mix(in oklab, var(--rb-yellow) 85%, transparent) 22px 28px,
+      transparent 28px 44px
+    );
+  }
+
+  .plate {
+    background: linear-gradient(160deg, color-mix(in oklab, var(--navy-800) 92%, transparent), color-mix(in oklab, var(--navy-950) 88%, transparent));
+    border: 1px solid var(--line);
+    box-shadow: var(--elevation);
+  }
+
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--rb-yellow);
+  }
+
+  .reveal {
+    opacity: 0;
+    transform: translate3d(0, 28px, 0);
+    transition:
+      opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+    transition-delay: var(--reveal-delay, 0ms);
+  }
+
+  .reveal.is-in {
+    opacity: 1;
+    transform: none;
+  }
+
+  .marquee-track {
+    display: flex;
+    width: max-content;
+    animation: marquee 42s linear infinite;
+  }
+
+  .telemetry-dot {
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+}
+
+@keyframes marquee {
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .marquee-track,
+  .telemetry-dot {
+    animation: none;
+  }
+
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
