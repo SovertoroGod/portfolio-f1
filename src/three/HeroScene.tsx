@@ -1,7 +1,13 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { ContactShadows, MeshReflectorMaterial, OrbitControls, useProgress } from "@react-three/drei";
+import {
+  ContactShadows,
+  Environment,
+  MeshReflectorMaterial,
+  OrbitControls,
+  useProgress,
+} from "@react-three/drei";
 import { RaceCar } from "./RaceCar";
 
 const STREAK_COLORS = ["#e10600", "#ffd100", "#7fa8ff", "#ffffff"];
@@ -92,11 +98,38 @@ function Turntable() {
 function Rig({ reducedMotion, quality }: { reducedMotion: boolean; quality: "high" | "lite" }) {
   return (
     <>
-      <ambientLight intensity={0.5} color="#9fb6ff" />
-      <directionalLight position={[6, 9, 5]} intensity={2.4} color="#ffffff" />
-      <spotLight position={[-8, 5, 4]} angle={0.6} penumbra={1} intensity={160} color="#e10600" distance={26} />
-      <spotLight position={[8, 4, -6]} angle={0.7} penumbra={1} intensity={140} color="#2f6bff" distance={26} />
-      <pointLight position={[0, 1.4, -4]} intensity={40} color="#ffd100" distance={14} />
+      <hemisphereLight args={["#cfe0ff", "#0a1024", 0.6]} />
+      <ambientLight intensity={0.7} color="#9fb6ff" />
+      <directionalLight position={[6, 9, 5]} intensity={3.2} color="#ffffff" />
+      <directionalLight position={[7.5, 3.4, 9]} intensity={1.8} color="#eaf0ff" />
+      <spotLight position={[0, 8, 1.5]} angle={0.62} penumbra={0.9} intensity={300} color="#ffffff" distance={24} />
+      <spotLight position={[-8, 5, 4]} angle={0.6} penumbra={1} intensity={230} color="#e10600" distance={26} />
+      <spotLight position={[8, 4, -6]} angle={0.7} penumbra={1} intensity={200} color="#2f6bff" distance={26} />
+      <pointLight position={[0, 1.4, -4]} intensity={55} color="#ffd100" distance={14} />
+
+      {/* Local light rig the car can reflect, so metallic paint stops reading as black. */}
+      <Environment resolution={256} frames={1}>
+        <mesh scale={60}>
+          <sphereGeometry args={[1, 24, 16]} />
+          <meshBasicMaterial color="#0b1226" side={THREE.BackSide} />
+        </mesh>
+        <mesh position={[0, 22, 0]} rotation-x={Math.PI / 2}>
+          <planeGeometry args={[34, 8]} />
+          <meshBasicMaterial color="#ffffff" side={THREE.DoubleSide} />
+        </mesh>
+        <mesh position={[18, 6, 20]} rotation-y={-Math.PI / 3}>
+          <planeGeometry args={[16, 12]} />
+          <meshBasicMaterial color="#c9d8ff" side={THREE.DoubleSide} />
+        </mesh>
+        <mesh position={[-20, 5, 0]} rotation-y={Math.PI / 2}>
+          <planeGeometry args={[14, 10]} />
+          <meshBasicMaterial color="#e10600" side={THREE.DoubleSide} />
+        </mesh>
+        <mesh position={[10, 4, -22]} rotation-y={Math.PI}>
+          <planeGeometry args={[14, 10]} />
+          <meshBasicMaterial color="#ffd100" side={THREE.DoubleSide} />
+        </mesh>
+      </Environment>
 
       <group position={[0, 0.02, 0]}>
         <RaceCar reducedMotion={reducedMotion} />
@@ -176,6 +209,9 @@ export function HeroScene({ reducedMotion }: { reducedMotion: boolean }) {
         dpr={[1, quality === "high" ? 1.8 : 1.4]}
         camera={{ position: [8.6, 2.9, 8.4], fov: 30, near: 0.1, far: 120 }}
         gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
+        onCreated={({ gl }) => {
+          gl.toneMappingExposure = 1.3;
+        }}
         frameloop={active ? "always" : "never"}
       >
         <Suspense fallback={null}>

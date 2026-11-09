@@ -17,6 +17,13 @@ export function RaceCar({ reducedMotion = false }: { reducedMotion?: boolean }) 
     const node = scene.clone(true);
     node.rotation.y = Math.PI;
     node.position.x = -0.24;
+    node.traverse((child) => {
+      if (!(child instanceof THREE.Mesh)) return;
+      const materials = Array.isArray(child.material) ? child.material : [child.material];
+      materials.forEach((material) => {
+        if (material instanceof THREE.MeshStandardMaterial) material.envMapIntensity = 1.4;
+      });
+    });
     return node;
   }, [scene]);
 
