@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
@@ -24,6 +24,7 @@ type Wheel = { pivot: THREE.Group; axis: (typeof AXES)[number]; radius: number; 
 
 export function RaceCar({ speed = 0, blurSamples = 0 }: { speed?: number; blurSamples?: number }) {
   const { scene } = useGLTF(CAR_URL);
+  const body = useRef<THREE.Group>(null);
 
   // Model space: nose along -X, 5.4 m long, already resting on y = 0.
   // Flipping by PI puts the nose along +X, the direction the track scrolls from.
@@ -127,7 +128,7 @@ export function RaceCar({ speed = 0, blurSamples = 0 }: { speed?: number; blurSa
     return found;
   }, [blurSamples, car]);
 
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
     if (!speed) return;
     const dt = Math.min(delta, MAX_FRAME_DELTA);
     for (const wheel of wheels) {
@@ -141,9 +142,22 @@ export function RaceCar({ speed = 0, blurSamples = 0 }: { speed?: number; blurSa
       const rotation = wheel.pivot.rotation[wheel.axis];
       for (const trail of wheel.trails) trail.pivot.rotation[wheel.axis] = rotation - trail.lag * span;
     }
+
+    // Suspension working over the surface. Deliberately tiny and slow: two sines this small read as
+    // weight, while anything sharper looks like a model coming apart.
+    const t = state.clock.elapsedTime;
+    if (body.current) {
+      body.current.position.y = Math.sin(t * 6.1) * 0.009 + Math.sin(t * 2.3) * 0.005;
+      body.current.rotation.z = Math.sin(t * 4.3) * 0.004;
+      body.current.rotation.x = Math.sin(t * 3.7) * 0.003;
+    }
   });
 
-  return <primitive object={car} />;
+  return (
+    <group ref={body}>
+      <primitive object={car} />
+    </group>
+  );
 }
 
 useGLTF.preload(CAR_URL);

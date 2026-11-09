@@ -110,7 +110,7 @@ export function Hero({ reducedMotion }: { reducedMotion: boolean }) {
 
             <p className="mt-6 hidden items-center gap-2 font-mono text-[0.68rem] tracking-[0.18em] text-steel uppercase lg:flex">
               <ArrowDown className="size-3.5 rotate-[-90deg]" aria-hidden />
-              Drag anywhere to orbit the car
+              Trackside camera &mdash; the lens runs the corner
             </p>
           </div>
         </div>

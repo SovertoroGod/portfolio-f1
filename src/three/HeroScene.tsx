@@ -5,15 +5,13 @@ import {
   ContactShadows,
   Environment,
   MeshReflectorMaterial,
-  OrbitControls,
   useProgress,
 } from "@react-three/drei";
 import { RaceCar } from "./RaceCar";
 
 const STREAK_COLORS = ["#e10600", "#ffd100", "#7fa8ff", "#ffffff"];
 const TRACK_SPEED = 9;
-// The hero is parked: still tarmac, still tyres, only the streaks drift past. Set true to roll again.
-const SCENE_MOVES = false;
+const SCENE_MOVES = true;
 
 // A circuit corner, not a grey strip: the road is one arc of radius TRACK_R centred at world
 // (0, -TRACK_R), so it runs tangentially along +X through the origin and stays aligned with the car.
@@ -26,6 +24,12 @@ const TRACK_A = 0.8;
 const TRACK_ARC = TRACK_A * TRACK_R;
 const OUTER = TRACK_R + TRACK_HALF_WIDTH;
 const INNER = TRACK_R - TRACK_HALF_WIDTH;
+
+// Trackside furniture is placed with the same maths as the road: a run of them at fixed radius
+// follows the corner, and each one is turned so its local +X is the direction of travel.
+function arcXZ(radius: number, a: number): [number, number] {
+  return [radius * Math.sin(a), TRACK_CZ + radius * Math.cos(a)];
+}
 
 type BandProps = {
   rFrom: number;
@@ -98,7 +102,8 @@ function ArcBlocks({
     if (!instanced) return;
     for (let index = 0; index < count; index++) {
       const a = offset + slots[index] / radius;
-      dummy.position.set(radius * Math.sin(a), y, TRACK_CZ + radius * Math.cos(a));
+      const [x, z] = arcXZ(radius, a);
+      dummy.position.set(x, y, z);
       dummy.rotation.set(0, a, 0);
       dummy.scale.set(length, height, width);
       dummy.updateMatrix();
@@ -283,6 +288,192 @@ function Track({ quality, moving }: { quality: "high" | "lite"; moving: boolean 
   );
 }
 
+// The full "lights out and away we go" sequence, replayed on a loop over the start line.
+// Lamps come on one by one and stay on, all five hold red together, then everything goes dark.
+const LAMP_OFFSETS = [-3.4, -1.7, 0, 1.7, 3.4];
+const LIGHT_CYCLE = 6.4;
+const LIGHT_FIRST = 1.1;
+const LIGHT_STEP = 0.62;
+const LIGHTS_OUT = LIGHT_FIRST + (LAMP_OFFSETS.length - 1) * LIGHT_STEP + 1.3;
+
+function lampLevel(index: number, elapsed: number) {
+  const t = elapsed % LIGHT_CYCLE;
+  return t >= LIGHT_FIRST + index * LIGHT_STEP && t < LIGHTS_OUT ? 1 : 0;
+}
+
+function Lamp({ index, offset, animate }: { index: number; offset: number; animate: boolean }) {
+  const core = useRef<THREE.MeshBasicMaterial>(null);
+  const halo = useRef<THREE.MeshBasicMaterial>(null);
+
+  useFrame(({ clock }) => {
+    // Held red when the scene is parked, so the gantry still reads as start lights.
+    const lit = animate ? lampLevel(index, clock.elapsedTime) : 1;
+    if (core.current) core.current.color.setRGB(0.13 + 0.87 * lit, 0.04 + 0.16 * lit, 0.04 + 0.04 * lit);
+    if (halo.current) halo.current.opacity = 0.62 * lit;
+  });
+
+  return (
+    <group position={[0, 2.36, offset]}>
+      <mesh position={[0, 0.42, 0]}>
+        <boxGeometry args={[0.09, 0.7, 0.09]} />
+        <meshStandardMaterial color="#0b1018" roughness={0.6} metalness={0.5} />
+      </mesh>
+      {/* Spheres rather than housings, so the lamps glow from every viewing angle. */}
+      <mesh>
+        <sphereGeometry args={[0.2, 18, 14]} />
+        <meshBasicMaterial ref={core} toneMapped={false} />
+      </mesh>
+      <mesh>
+        <sphereGeometry args={[0.36, 14, 12]} />
+        <meshBasicMaterial
+          ref={halo}
+          color="#ff3a1e"
+          transparent
+          opacity={0}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+          toneMapped={false}
+        />
+      </mesh>
+    </group>
+  );
+}
+
+function StartLights({ a, animate }: { a: number; animate: boolean }) {
+  const [x, z] = arcXZ(TRACK_R, a);
+  const spill = useRef<THREE.PointLight>(null);
+
+  useFrame(({ clock }) => {
+    if (!spill.current) return;
+    if (!animate) {
+      spill.current.intensity = 6 + LAMP_OFFSETS.length * 26;
+      return;
+    }
+    const t = clock.elapsedTime;
+    const lit = LAMP_OFFSETS.reduce((sum, _, index) => sum + lampLevel(index, t), 0);
+    spill.current.intensity = 6 + lit * 26;
+  });
+
+  return (
+    <group position={[x, 0, z]} rotation-y={a}>
+      {[-1, 1].map((side) => (
+        <mesh key={side} position={[0, 1.45, side * (TRACK_HALF_WIDTH + 1.2)]}>
+          <boxGeometry args={[0.3, 2.9, 0.3]} />
+          <meshStandardMaterial color="#0a0e17" roughness={0.55} metalness={0.6} />
+        </mesh>
+      ))}
+      <mesh position={[0, 2.92, 0]}>
+        <boxGeometry args={[0.34, 0.3, (TRACK_HALF_WIDTH + 1.2) * 2]} />
+        <meshStandardMaterial color="#0a0e17" roughness={0.55} metalness={0.6} />
+      </mesh>
+      {LAMP_OFFSETS.map((offset, index) => (
+        <Lamp key={offset} index={index} offset={offset} animate={animate} />
+      ))}
+      <pointLight ref={spill} position={[0, 2.2, 0]} color="#ff2a12" distance={16} decay={2} />
+    </group>
+  );
+}
+
+// Ordered near-to-far so the lite build's three flags are the ones actually in shot, and spaced for
+// the dolly's wider, more head-on angle.
+const FLAG_A = [-0.05, -0.14, -0.23, -0.32, -0.41, -0.5];
+
+function MarshalFlags({ count, animate }: { count: number; animate: boolean }) {
+  const cloths = useRef<(THREE.Group | null)[]>([]);
+
+  useFrame(({ clock }) => {
+    if (!animate) return;
+    const t = clock.elapsedTime;
+    for (let index = 0; index < count; index++) {
+      const cloth = cloths.current[index];
+      if (!cloth) continue;
+      cloth.rotation.y = Math.sin(t * 1.9 + index * 1.7) * 0.5;
+      cloth.rotation.z = Math.sin(t * 3.1 + index * 0.9) * 0.16 - 0.1;
+    }
+  });
+
+  const radius = INNER - 6.7;
+  return (
+    <>
+      {FLAG_A.slice(0, count).map((a, index) => {
+        const [x, z] = arcXZ(radius, a);
+        return (
+          <group key={a} position={[x, 0, z]} rotation-y={a}>
+            <mesh position={[0, 1.05, 0]}>
+              <cylinderGeometry args={[0.06, 0.07, 2.1, 8]} />
+              <meshStandardMaterial color="#141a26" roughness={0.6} metalness={0.4} />
+            </mesh>
+            <group
+              position={[0, 1.95, 0]}
+              ref={(node) => {
+                cloths.current[index] = node;
+              }}
+            >
+              <mesh position={[0.46, 0, 0]}>
+                <planeGeometry args={[0.9, 0.6]} />
+                <meshStandardMaterial
+                  color={index % 3 === 2 ? "#e10600" : "#ffd100"}
+                  side={THREE.DoubleSide}
+                  roughness={0.85}
+                />
+              </mesh>
+            </group>
+          </group>
+        );
+      })}
+    </>
+  );
+}
+
+// A floodlight that walks along the near edge of the straight, so the highlight keeps travelling
+// across the paint instead of the car sitting under one fixed reflection.
+function SweepingLight({ animate }: { animate: boolean }) {
+  const light = useRef<THREE.PointLight>(null);
+
+  useFrame(({ clock }) => {
+    if (!light.current || !animate) return;
+    const [x, z] = arcXZ(OUTER - 1.2, Math.sin(clock.elapsedTime * 0.21) * 0.24);
+    light.current.position.set(x, 4.2, z);
+  });
+
+  const [x, z] = arcXZ(OUTER - 1.2, 0);
+  return <pointLight ref={light} position={[x, 4.2, z]} intensity={150} color="#dce8ff" distance={20} decay={2} />;
+}
+
+// Camera rig: a trackside dolly instead of an orbit. The lens sits on a lane outside the road and
+// travels the corner's arc, so the car stays put while the background slides past it. Look-at rests
+// just behind the tail to push the car right, clear of the hero copy on the left; the phone build
+// pulls back further because a 30° vertical fov is only ~17° across in portrait.
+const DOLLY_LOOK: [number, number, number] = [-0.5, 0.55, 0];
+// Phase that opens the shot on the front-side three-quarter view.
+const DOLLY_PHASE = 0.62;
+
+const DOLLY = {
+  high: { radius: OUTER + 6, height: 2.5, swing: 0.17, rate: 0.26 },
+  lite: { radius: OUTER + 11, height: 3.4, swing: 0.09, rate: 0.2 },
+};
+
+function dollyPose(elapsed: number, quality: keyof typeof DOLLY) {
+  const { radius, height, swing, rate } = DOLLY[quality];
+  const a = Math.sin(elapsed * rate + DOLLY_PHASE) * swing;
+  // Two slower terms on top of the swing: the lane drifts in and out of the road and the lens
+  // breathes vertically, so no single period gives the loop away.
+  const [x, z] = arcXZ(radius + Math.sin(elapsed * 0.09) * 1.2, a);
+  return new THREE.Vector3(x, height + Math.sin(elapsed * 0.13) * 0.6, z);
+}
+
+function TrackDolly({ animate, quality }: { animate: boolean; quality: keyof typeof DOLLY }) {
+  const look = useMemo(() => new THREE.Vector3(...DOLLY_LOOK), []);
+
+  useFrame(({ camera, clock }) => {
+    if (!animate) return;
+    camera.position.copy(dollyPose(clock.elapsedTime, quality));
+    camera.lookAt(look);
+  });
+
+  return null;
+}
+
 function SpeedStreaks({ count }: { count: number }) {
   const mesh = useRef<THREE.InstancedMesh>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
@@ -377,13 +568,16 @@ function Rig({ reducedMotion, quality }: { reducedMotion: boolean; quality: "hig
       <group position={[0, 0.02, 0]}>
         <RaceCar speed={moving ? TRACK_SPEED : 0} blurSamples={moving && quality === "high" ? 4 : 0} />
         <Track quality={quality} moving={moving} />
+        <StartLights a={-0.05} animate={moving} />
+        <MarshalFlags count={quality === "high" ? 6 : 3} animate={moving} />
+        <SweepingLight animate={moving} />
       </group>
 
       {quality === "high" ? (
         <>
-          {/* Sits just above the painted markings: ContactShadows looks upward, so the road below it
-              is not captured and only the car (and the raised kerbs) darken the plane. */}
-          <ContactShadows position={[0, 0.0236, 0]} opacity={0.72} scale={16} blur={2.6} far={4} resolution={512} color="#01030a" />
+          {/* Sits just above the painted markings and reaches only 1.4 upward, so the shadow is the
+              car itself rather than the gantry, flags and barrier standing over the road. */}
+          <ContactShadows position={[0, 0.0236, 0]} opacity={0.72} scale={16} blur={2.6} far={1.4} resolution={512} color="#01030a" />
           <mesh rotation-x={-Math.PI / 2} position={[0, -0.06, 0]}>
             <planeGeometry args={[70, 70]} />
             <MeshReflectorMaterial
@@ -452,24 +646,18 @@ export function HeroScene({ reducedMotion }: { reducedMotion: boolean }) {
     <div ref={container} className="absolute inset-0" aria-hidden>
       <Canvas
         dpr={[1, quality === "high" ? 1.8 : 1.4]}
-        camera={{ position: [8.6, 2.9, 8.4], fov: 30, near: 0.1, far: 120 }}
+        camera={{ position: dollyPose(0, quality).toArray() as [number, number, number], fov: 30, near: 0.1, far: 120 }}
         gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
-        onCreated={({ gl }) => {
+        onCreated={({ gl, camera }) => {
           gl.toneMappingExposure = 1.3;
+          camera.lookAt(new THREE.Vector3(...DOLLY_LOOK));
         }}
         frameloop={active ? "always" : "never"}
       >
         <Suspense fallback={null}>
           <fog attach="fog" args={["#03060f", 16, 46]} />
           <Rig reducedMotion={reducedMotion} quality={quality} />
-          <OrbitControls
-            enablePan={false}
-            enableZoom={false}
-            rotateSpeed={0.45}
-            minPolarAngle={0.72}
-            maxPolarAngle={1.46}
-            target={[0, 0.62, 0]}
-          />
+          <TrackDolly animate={!reducedMotion} quality={quality} />
         </Suspense>
       </Canvas>
     </div>
